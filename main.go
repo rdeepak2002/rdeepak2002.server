@@ -145,7 +145,9 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 		item.PreviousDatesVisited = append(item.PreviousDatesVisited, time.Now().Unix())
 
 		// Prevent visited dates array from becoming too large
-		if len(item.PreviousDatesVisited) > 5 {
+		maxNumVisits := 500
+
+		if len(item.PreviousDatesVisited) > maxNumVisits {
 			item.PreviousDatesVisited = item.PreviousDatesVisited[1:]
 		}
 	} else {
