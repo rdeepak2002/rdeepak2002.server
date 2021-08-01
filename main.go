@@ -18,6 +18,7 @@ import (
 type SetVisit struct {
 	BrowserId string
 	DeviceId  string
+	IsMobile  byte
 }
 
 type Visit struct {
@@ -70,7 +71,6 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 	// Initialize the item to be saved in the db
 	ip := readUserIP(r)
 	userAgent := r.UserAgent()
-	var isMobile byte = 0
 	var createdAt uint64 = 0
 
 	item := Visit{
@@ -79,7 +79,7 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 		BrowserId:            setVisitReq.BrowserId,
 		DeviceId:             setVisitReq.DeviceId,
 		UserAgent:            userAgent,
-		IsMobile:             isMobile,
+		IsMobile:             setVisitReq.IsMobile,
 		CreatedAt:            createdAt,
 		PreviousDatesVisited: previousDatesVisitedTemp,
 	}
