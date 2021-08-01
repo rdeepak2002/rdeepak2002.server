@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/google/uuid"
 )
+
+type SetVisit struct {
+	BrowserId string
+	DeviceId  string
+}
 
 type Visit struct {
 	Id                   string
@@ -45,6 +51,11 @@ func readUserIP(r *http.Request) string {
 }
 
 func setVisit(w http.ResponseWriter, r *http.Request) {
+	// Read the request body
+	reqBody, _ := ioutil.ReadAll(r.Body)
+	var setVisitReq SetVisit
+	json.Unmarshal(reqBody, &setVisitReq)
+
 	// Initialize a session that the SDK will use to load
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -56,6 +67,7 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 	uuidStr := uuid.New().String()
 	previousDatesVisitedTemp := []uint64{1, 2, 3, 4, 5}
 
+	// Initialize the item to be saved in the db
 	ip := readUserIP(r)
 	userAgent := r.UserAgent()
 	var isMobile byte = 0
@@ -64,8 +76,8 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 	item := Visit{
 		Id:                   uuidStr,
 		Ip:                   ip,
-		BrowserId:            "some browser id",
-		DeviceId:             "some device id",
+		BrowserId:            setVisitReq.BrowserId,
+		DeviceId:             setVisitReq.DeviceId,
 		UserAgent:            userAgent,
 		IsMobile:             isMobile,
 		CreatedAt:            createdAt,
@@ -78,7 +90,7 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Got error marshalling new visit item: %s", err)
 	}
 
-	// Create item in table visit
+	// Create item in table Visits
 	tableName := "Visits"
 
 	input := &dynamodb.PutItemInput{
