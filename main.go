@@ -13,12 +13,13 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"github.com/google/uuid"
 )
 
 type SetVisit struct {
+	Id        string
 	BrowserId string
-	DeviceId  string
 	IsMobile  byte
 }
 
@@ -26,7 +27,6 @@ type Visit struct {
 	Id                   string
 	Ip                   string
 	BrowserId            string
-	DeviceId             string
 	UserAgent            string
 	IsMobile             byte // 0 is false, 1 is true, 2 is unknown
 	CreatedAt            int64
@@ -66,82 +66,102 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 	// Create DynamoDB client
 	svc := dynamodb.New(sess)
 
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-	// TODO: get current visit if it exists (search by UserAgent+IP OR DeviceId)
-
-	uuidStr := uuid.New().String()
+	// init previous dates visited array
 	previousDatesVisited := []int64{}
 
-	// Initialize the item to be saved in the db
+	// get the device's id from post request, otherwise gen new uuid if empty
+	deviceId := setVisitReq.Id
+	if deviceId == "" {
+		deviceId = uuid.New().String()
+	}
+
+	// Get variables for the db object
+	id := deviceId
 	ip := readUserIP(r)
 	userAgent := r.UserAgent()
 	browserId := setVisitReq.BrowserId
-	deviceId := setVisitReq.DeviceId
 	isMobile := setVisitReq.IsMobile
 	createdAt := time.Now().Unix()
 	previousDatesVisited = append(previousDatesVisited, createdAt)
+	tableName := "Visits"
 
-	if browserId == "" || deviceId == "" {
-		log.Printf("Received empty BrowserId or DeviceId")
+	if browserId == "" {
+		log.Printf("Received empty BrowserId")
 	}
 
+	// Try to see if this visit already exists in the database (search by UserAgent + IP OR Id)
+	filt := expression.Name("Id").Equal(expression.Value(id))
+	proj := expression.NamesList(expression.Name("Id"), expression.Name("Ip"), expression.Name("UserAgent"), expression.Name("BrowserId"), expression.Name("IsMobile"), expression.Name("CreatedAt"), expression.Name("PreviousDatesVisited"))
+	expr, err := expression.NewBuilder().WithFilter(filt).WithProjection(proj).Build()
+
+	if err != nil {
+		log.Fatalf("Got error building expression: %s", err)
+	}
+
+	params := &dynamodb.ScanInput{
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		FilterExpression:          expr.Filter(),
+		ProjectionExpression:      expr.Projection(),
+		TableName:                 aws.String(tableName),
+	}
+
+	result, err := svc.Scan(params)
+
+	if err != nil {
+		log.Fatalf("Query API call failed: %s", err)
+	}
+
+	maxCount := int64(1)
+
+	if result.Count == &maxCount {
+
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+		// TODO: fix that this line is never executed
+
+		item := Visit{}
+
+		err = dynamodbattribute.UnmarshalMap(result.Items[0], &item)
+
+		if err != nil {
+			log.Fatalf("Got error unmarshalling: %s", err)
+		}
+
+		log.Printf("Retrieved %s", item.Id)
+	} else {
+		log.Printf("Could not find %s", id)
+	}
+
+	// Initialize the item to be saved in the db
 	item := Visit{
-		Id:                   uuidStr,
+		Id:                   id,
 		Ip:                   ip,
 		BrowserId:            browserId,
-		DeviceId:             deviceId,
 		UserAgent:            userAgent,
 		IsMobile:             isMobile,
 		CreatedAt:            createdAt,
@@ -155,8 +175,6 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create item in table Visits
-	tableName := "Visits"
-
 	input := &dynamodb.PutItemInput{
 		Item:      av,
 		TableName: aws.String(tableName),
