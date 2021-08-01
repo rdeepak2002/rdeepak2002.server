@@ -53,6 +53,10 @@ func readUserIP(r *http.Request) string {
 }
 
 func setVisit(w http.ResponseWriter, r *http.Request) {
+	// Set CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
 	// Read the request body
 	reqBody, _ := ioutil.ReadAll(r.Body)
 	var setVisitReq SetVisit
