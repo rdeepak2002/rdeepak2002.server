@@ -89,8 +89,19 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received empty BrowserId")
 	}
 
-	// Try to see if this visit already exists in the database (search by UserAgent + IP OR Id)
-	filt := expression.Name("Id").Equal(expression.Value(id))
+	// Initialize the item to be saved in the db
+	item := Visit{
+		Id:                   id,
+		Ip:                   ip,
+		BrowserId:            browserId,
+		UserAgent:            userAgent,
+		IsMobile:             isMobile,
+		CreatedAt:            createdAt,
+		PreviousDatesVisited: previousDatesVisited,
+	}
+
+	// Try to see if this visit already exists in the database (search by Id OR (UserAgent AND IP))
+	filt := expression.Or(expression.Name("Id").Equal(expression.Value(id)), expression.And(expression.Name("UserAgent").Equal(expression.Value(userAgent)), expression.Name("Ip").Equal(expression.Value(ip))))
 	proj := expression.NamesList(expression.Name("Id"), expression.Name("Ip"), expression.Name("UserAgent"), expression.Name("BrowserId"), expression.Name("IsMobile"), expression.Name("CreatedAt"), expression.Name("PreviousDatesVisited"))
 	expr, err := expression.NewBuilder().WithFilter(filt).WithProjection(proj).Build()
 
@@ -112,62 +123,34 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Query API call failed: %s", err)
 	}
 
-	maxCount := int64(1)
+	if *result.Count == 1 {
+		curItem := Visit{}
 
-	if result.Count == &maxCount {
-
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-		// TODO: fix that this line is never executed
-
-		item := Visit{}
-
-		err = dynamodbattribute.UnmarshalMap(result.Items[0], &item)
+		err = dynamodbattribute.UnmarshalMap(result.Items[0], &curItem)
 
 		if err != nil {
 			log.Fatalf("Got error unmarshalling: %s", err)
 		}
 
-		log.Printf("Retrieved %s", item.Id)
+		log.Printf("Retrieved %s", curItem.Id)
+
+		// Update Id to the current one in the db
+		item.Id = curItem.Id
+		item.CreatedAt = curItem.CreatedAt
+		item.PreviousDatesVisited = curItem.PreviousDatesVisited
+		item.PreviousDatesVisited = append(item.PreviousDatesVisited, time.Now().Unix())
+
+		// Prevent visited dates array from becoming too large
+		if len(item.PreviousDatesVisited) > 5 {
+			item.PreviousDatesVisited = item.PreviousDatesVisited[1:]
+		}
 	} else {
 		log.Printf("Could not find %s", id)
+		// Create new Id for this object
+		item.Id = uuid.New().String()
 	}
 
-	// Initialize the item to be saved in the db
-	item := Visit{
-		Id:                   id,
-		Ip:                   ip,
-		BrowserId:            browserId,
-		UserAgent:            userAgent,
-		IsMobile:             isMobile,
-		CreatedAt:            createdAt,
-		PreviousDatesVisited: previousDatesVisited,
-	}
-
+	// Marshal map the item to be saved in db
 	av, err := dynamodbattribute.MarshalMap(item)
 
 	if err != nil {
@@ -186,7 +169,7 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Got error calling PutItem: %s", err)
 	}
 
-	fmt.Println("Successfully added '" + item.Id + " to table " + tableName)
+	fmt.Println("Successfully updated '" + item.Id + " to table " + tableName)
 
 	json.NewEncoder(w).Encode(item)
 }
