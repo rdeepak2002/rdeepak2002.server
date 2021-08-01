@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -28,8 +29,8 @@ type Visit struct {
 	DeviceId             string
 	UserAgent            string
 	IsMobile             byte // 0 is false, 1 is true, 2 is unknown
-	CreatedAt            uint64
-	PreviousDatesVisited []uint64
+	CreatedAt            int64
+	PreviousDatesVisited []int64
 }
 
 func determineListenAddress() (string, error) {
@@ -66,22 +67,30 @@ func setVisit(w http.ResponseWriter, r *http.Request) {
 	svc := dynamodb.New(sess)
 
 	uuidStr := uuid.New().String()
-	previousDatesVisitedTemp := []uint64{1, 2, 3, 4, 5}
+	previousDatesVisited := []int64{}
 
 	// Initialize the item to be saved in the db
 	ip := readUserIP(r)
 	userAgent := r.UserAgent()
-	var createdAt uint64 = 0
+	browserId := setVisitReq.BrowserId
+	deviceId := setVisitReq.DeviceId
+	isMobile := setVisitReq.IsMobile
+	createdAt := time.Now().Unix()
+	previousDatesVisited = append(previousDatesVisited, createdAt)
+
+	if browserId == "" || deviceId == "" {
+		log.Printf("Received empty BrowserId or DeviceId")
+	}
 
 	item := Visit{
 		Id:                   uuidStr,
 		Ip:                   ip,
-		BrowserId:            setVisitReq.BrowserId,
-		DeviceId:             setVisitReq.DeviceId,
+		BrowserId:            browserId,
+		DeviceId:             deviceId,
 		UserAgent:            userAgent,
-		IsMobile:             setVisitReq.IsMobile,
+		IsMobile:             isMobile,
 		CreatedAt:            createdAt,
-		PreviousDatesVisited: previousDatesVisitedTemp,
+		PreviousDatesVisited: previousDatesVisited,
 	}
 
 	av, err := dynamodbattribute.MarshalMap(item)
