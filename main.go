@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -43,9 +44,7 @@ func readUserIP(r *http.Request) string {
 	return IPAddress
 }
 
-func hello(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Hello World")
-
+func setVisit(w http.ResponseWriter, r *http.Request) {
 	// Initialize a session that the SDK will use to load
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -88,11 +87,14 @@ func hello(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = svc.PutItem(input)
+
 	if err != nil {
 		log.Fatalf("Got error calling PutItem: %s", err)
 	}
 
 	fmt.Println("Successfully added '" + item.Id + " to table " + tableName)
+
+	json.NewEncoder(w).Encode(item)
 }
 
 func main() {
@@ -100,7 +102,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("/hello", hello)
+	http.HandleFunc("/setVisit", setVisit)
 	log.Printf("Listening on %s...\n", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		panic(err)
